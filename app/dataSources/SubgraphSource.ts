@@ -152,8 +152,8 @@ export class SubgraphSource extends AbstractSource {
     }
     try {
       const res = await this.query(this.subgraphUrl, QUERY_ALL_JOBS);
-      const { jobs } = jobs;
-      const { nodes } = res;
+      const { jobs } = res;
+      const { nodes } = jobs;
       nodes.forEach(job => {
         const newJob = context._buildNewJob({
           name: 'RegisterJob',
