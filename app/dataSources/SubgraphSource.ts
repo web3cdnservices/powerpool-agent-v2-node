@@ -12,7 +12,7 @@ import { getMaxBlocksSubgraphDelay } from '../ConfigGetters.js';
 
 export const QUERY_ALL_JOBS = `{
   jobs(first: 1000) {
-  nodes: {
+  nodes {
     id
     active
     jobAddress
