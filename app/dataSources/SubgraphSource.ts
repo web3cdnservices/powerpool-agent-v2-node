@@ -44,10 +44,8 @@ export const QUERY_ALL_JOBS = `{
 }`;
 
 export const QUERY_META = `{
-  _meta {
-    block {
-      number
-    }
+  _metadata {
+    lastProcessedHeight
   }
 }`;
 
@@ -123,12 +121,12 @@ export class SubgraphSource extends AbstractSource {
   }
 
   async getBlocksDelay(): Promise<{ diff: bigint; nodeBlockNumber: bigint; sourceBlockNumber: bigint }> {
-    const [latestBock, { _meta }] = await Promise.all([
+    const [latestBock, { _metadata }] = await Promise.all([
       this.network.getLatestBlockNumber(),
       this.query(this.subgraphUrl, QUERY_META),
     ]);
     return {
-      diff: latestBock - BigInt(_meta.block.number),
+      diff: latestBock - BigInt(_metadata.lastProcessedHeight),
       nodeBlockNumber: latestBock,
       sourceBlockNumber: latestBock,
     };
