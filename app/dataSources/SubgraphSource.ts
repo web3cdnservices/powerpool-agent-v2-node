@@ -12,6 +12,7 @@ import { getMaxBlocksSubgraphDelay } from '../ConfigGetters.js';
 
 export const QUERY_ALL_JOBS = `{
   jobs(first: 1000) {
+  nodes: {
     id
     active
     jobAddress
@@ -39,6 +40,7 @@ export const QUERY_ALL_JOBS = `{
     jobReservedSlasherId
     jobSlashingPossibleAfter
   }
+  }
 }`;
 
 export const QUERY_META = `{
@@ -51,8 +53,10 @@ export const QUERY_META = `{
 
 export const QUERY_JOB_OWNERS = `{
   jobOwners {
-    id
-    credits
+    nodes {
+      id
+      credits
+    }
   }
 }`;
 
@@ -148,8 +152,9 @@ export class SubgraphSource extends AbstractSource {
     }
     try {
       const res = await this.query(this.subgraphUrl, QUERY_ALL_JOBS);
-      const { jobs } = res;
-      jobs.forEach(job => {
+      const { jobs } = jobs;
+      const { nodes } = res;
+      nodes.forEach(job => {
         const newJob = context._buildNewJob({
           name: 'RegisterJob',
           args: {
@@ -245,7 +250,8 @@ export class SubgraphSource extends AbstractSource {
       }
 
       const { jobOwners } = await this.query(this.subgraphUrl, QUERY_JOB_OWNERS);
-      jobOwners.forEach(JobOwner => {
+      const { nodes } = jobOwners;
+      nodes.forEach(JobOwner => {
         result.set(toChecksummedAddress(JobOwner.id), BigNumber.from(JobOwner.credits));
       });
     } catch (e) {
