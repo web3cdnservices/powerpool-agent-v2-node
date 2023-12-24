@@ -40,6 +40,54 @@ interface TimeoutWithCallback {
   callback: (blockNumber: number, blockTimestamp: number) => void;
 }
 
+type KeepAliveParams = {
+  provider: ethers.providers.WebSocketProvider;
+  onDisconnect: (err: any) => void;
+  onConnect: () => void;
+  expectedPongBack?: number;
+  checkInterval?: number;
+};
+
+const keepAlive = ({
+                     provider,
+                     onDisconnect,
+                     onConnect,
+                     expectedPongBack = 15000,
+                     checkInterval = 7500,
+                   }: KeepAliveParams) => {
+  let pingTimeout: NodeJS.Timeout | null = null;
+  let keepAliveInterval: NodeJS.Timeout | null = null;
+
+  provider._websocket.on('open', () => {
+    keepAliveInterval = setInterval(() => {
+      provider._websocket.ping();
+
+      // Use `WebSocket#terminate()`, which immediately destroys the connection,
+      // instead of `WebSocket#close()`, which waits for the close timer.
+      // Delay should be equal to the interval at which your server
+      // sends out pings plus a conservative assumption of the latency.
+      pingTimeout = setTimeout(() => {
+        provider._websocket.terminate();
+      }, expectedPongBack);
+    }, checkInterval);
+    onConnect();
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  provider._websocket.on('close', (err: any) => {
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    if (pingTimeout) clearTimeout(pingTimeout);
+    onDisconnect(err);
+  });
+
+  provider._websocket.on('pong', () => {
+    if (pingTimeout) clearInterval(pingTimeout);
+  });
+  provider._websocket.on('error', () => {
+    // provider._websocket.terminate();
+  });
+};
+
 export class Network {
   private initialized: boolean;
   private app: App;
@@ -264,15 +312,42 @@ export class Network {
     return agents;
   }
 
+
   private initProvider() {
+
+    const instance=this;
     this.provider = new ethers.providers.WebSocketProvider(this.rpc);
     this.fixProvider(this.provider);
-    this.contractWrapperFactory = new EthersContractWrapperFactory([this.rpc], this.networkConfig.ws_timeout);
-    this.fixProvider(this.contractWrapperFactory.getDefaultProvider());
-    this.multicall = this.contractWrapperFactory.build(this.multicall2Address, getMulticall2Abi());
-    // TODO: initialize this after we know agent version and strategy
-    this.externalLens = this.contractWrapperFactory.build(this.externalLensAddress, getExternalLensAbi());
-    this.provider.on('block', this._onNewBlockCallback.bind(this));
+
+    keepAlive({
+      provider: this.provider,
+      onDisconnect: (err) => {
+        this.clog('error', `Ws connection ${instance.rpc} interrupt. Retrying.  ${JSON.stringify(err, null, 2)}`);
+        // this.err(`Ws connection interrupt`);
+        // console.error('The ws connection was closed', JSON.stringify(err, null, 2));
+
+        setTimeout(()=>{
+          this.stop();
+          this.initProvider();
+        },3000)
+
+      },
+      onConnect() {
+        instance.clog('info', `Ws connection ${instance.rpc} established`);
+        instance.contractWrapperFactory = new EthersContractWrapperFactory([instance.rpc], instance.networkConfig.ws_timeout);
+        // instance.fixProvider(instance.contractWrapperFactory.getDefaultProvider());
+        instance.multicall = instance.contractWrapperFactory.build(instance.multicall2Address, getMulticall2Abi());
+        // TODO: initialize this after we know agent version and strategy
+        instance.externalLens = instance.contractWrapperFactory.build(instance.externalLensAddress, getExternalLensAbi());
+        instance.provider.on('block', instance._onNewBlockCallback.bind(instance));
+
+
+      }
+    });
+
+
+
+
   }
 
   private fixProvider(provider) {
