@@ -313,11 +313,12 @@ export class Network {
   }
 
 
-  private initProvider() {
+  private async initProvider() {
 
     const instance=this;
     this.provider = new ethers.providers.WebSocketProvider(this.rpc);
     this.fixProvider(this.provider);
+    // instance.fixProvider(instance.contractWrapperFactory.getDefaultProvider());
 
     keepAlive({
       provider: this.provider,
@@ -335,11 +336,13 @@ export class Network {
       onConnect() {
         instance.clog('info', `Ws connection ${instance.rpc} established`);
         instance.contractWrapperFactory = new EthersContractWrapperFactory([instance.rpc], instance.networkConfig.ws_timeout);
-        // instance.fixProvider(instance.contractWrapperFactory.getDefaultProvider());
+        instance.fixProvider(instance.contractWrapperFactory.getDefaultProvider());
         instance.multicall = instance.contractWrapperFactory.build(instance.multicall2Address, getMulticall2Abi());
         // TODO: initialize this after we know agent version and strategy
         instance.externalLens = instance.contractWrapperFactory.build(instance.externalLensAddress, getExternalLensAbi());
         instance.provider.on('block', instance._onNewBlockCallback.bind(instance));
+
+        return Promise.resolve();
 
 
       }
@@ -413,11 +416,10 @@ export class Network {
       return;
     }
 
-    this.initProvider();
+    await this.initProvider();
 
     try {
       const latestBlock = await this.queryLatestBlock();
-
       this.latestBaseFee = BigInt(latestBlock.baseFeePerGas.toString());
       this.latestBlockNumber = BigInt(latestBlock.number.toString());
       this.latestBlockTimestamp = BigInt(latestBlock.timestamp.toString());
@@ -747,5 +749,8 @@ export class Network {
   ): Promise<LensGetJobBytes32AndNextBlockSlasherIdResponse> {
     const res = await this.externalLens.ethCall('getJobBytes32AndNextBlockSlasherId', [agent, jobKey]);
     return { binJob: res.binJob, nextBlockSlasherId: res.nextBlockSlasherId.toNumber() };
+  }
+  public async getFeeData() {
+    return this.provider.getFeeData();
   }
 }

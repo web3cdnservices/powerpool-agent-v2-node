@@ -54,6 +54,7 @@ export class PGAExecutor extends AbstractExecutor implements Executor {
     let gasLimitEstimation;
     try {
       gasLimitEstimation = await this.genericProvider.estimateGas(prepareTx(tx));
+      console.log('------------------------------------gasLimitEstimation',gasLimitEstimation);
     } catch (e) {
       let txSimulation;
       try {
@@ -205,13 +206,16 @@ export class PGAExecutor extends AbstractExecutor implements Executor {
       };
     }
     const chainId = networkStatusObj['chainId'];
+    let fee= await this.network.getProvider().getFeeData();
     const txData = {
       transactionJson: jsonStringify(prepareTx(transaction)),
       metadataJson: jsonStringify({
         appEnv: process.env.APP_ENV,
         appVersion: this.network.getAppVersion(),
-        baseFeeGwei: weiValueToGwei(networkStatusObj['baseFee']),
-        maxPriorityFeeGwei: weiValueToGwei(BigInt(await this.network.getMaxPriorityFeePerGas().catch(() => 0))),
+        baseFeeGwei: (fee.lastBaseFeePerGas),
+        // baseFeeGwei: weiValueToGwei(networkStatusObj['baseFee']),
+        maxPriorityFeeGwei: (fee.maxPriorityFeePerGas),
+        // maxPriorityFeeGwei: weiValueToGwei(BigInt(await this.network.getMaxPriorityFeePerGas().catch(() => 0))),
         keeperId: agent ? agent.keeperId : null,
         rpc: networkStatusObj['rpc'],
         rpcClient: await this.network.getClientVersion(),
