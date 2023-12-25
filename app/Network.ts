@@ -24,6 +24,7 @@ import { App } from './App.js';
 import logger, { updateSentryScope } from './services/Logger.js';
 import ContractEventsEmitter from './services/ContractEventsEmitter.js';
 import { SubgraphSource } from './dataSources/SubgraphSource.js';
+import { SubquerySource } from './dataSources/SubquerySource.js';
 import { BlockchainSource } from './dataSources/BlockchainSource.js';
 import { AgentRandao_2_3_0 } from './agents/Agent.2.3.0.randao.js';
 import { AgentLight_2_2_0 } from './agents/Agent.2.2.0.light.js';
@@ -207,6 +208,10 @@ export class Network {
     return null;
   }
 
+  public getRpc() {
+    return this.rpc
+  }
+
   // TODO: throttle node requests
   public async getMaxPriorityFeePerGas(): Promise<number> {
     return this.provider.send('eth_maxPriorityFeePerGas', []);
@@ -328,14 +333,14 @@ export class Network {
         // console.error('The ws connection was closed', JSON.stringify(err, null, 2));
 
         setTimeout(()=>{
-          this.stop();
+          // this.stop();
           this.initProvider();
         },3000)
 
       },
       onConnect() {
         instance.clog('info', `Ws connection ${instance.rpc} established`);
-        instance.contractWrapperFactory = new EthersContractWrapperFactory([instance.rpc], instance.networkConfig.ws_timeout);
+        instance.contractWrapperFactory = new EthersContractWrapperFactory(instance, instance.networkConfig.ws_timeout);
         instance.fixProvider(instance.contractWrapperFactory.getDefaultProvider());
         instance.multicall = instance.contractWrapperFactory.build(instance.multicall2Address, getMulticall2Abi());
         // TODO: initialize this after we know agent version and strategy
@@ -485,6 +490,8 @@ export class Network {
       );
       if (agent.dataSourceType === 'subgraph') {
         dataSource = this.getAgentSubgraphDataSource(agent);
+      } else if (agent.dataSourceType === 'subquery') {
+        dataSource = this.getAgentSubqueryDataSource(agent);
       } else if (agent.dataSourceType === 'blockchain') {
         dataSource = this.getAgentBlockchainDataSource(agent);
       } else {
@@ -499,6 +506,11 @@ export class Network {
   public getAgentSubgraphDataSource(agent) {
     return new SubgraphSource(this, agent, agent.subgraphUrl);
   }
+
+  public getAgentSubqueryDataSource(agent) {
+    return new SubquerySource(this, agent, agent.subgraphUrl);
+  }
+
 
   public getAgentBlockchainDataSource(agent) {
     return new BlockchainSource(this, agent);
