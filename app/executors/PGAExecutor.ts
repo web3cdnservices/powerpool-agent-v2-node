@@ -97,10 +97,14 @@ export class PGAExecutor extends AbstractExecutor implements Executor {
     if (!gasLimitEstimation) {
       return callback(this.err(`gasLimitEstimation is not set: ${gasLimitEstimation}`));
     }
+    let fee= await this.network.getProvider().getFeeData();
+    tx.maxPriorityFeePerGas=fee.maxPriorityFeePerGas.toBigInt();
+    tx.maxFeePerGas=fee.maxFeePerGas.toBigInt();
 
     tx.gasLimit = gasLimitEstimation.mul(40).div(10);
 
     this.clog('debug', `📝 Signing tx with calldata=${tx.data} ...`);
+
     const signedTx = await this.workerSigner.signTransaction(prepareTx(tx));
 
     const txHash = utils.parseTransaction(signedTx).hash;
@@ -111,17 +115,17 @@ export class PGAExecutor extends AbstractExecutor implements Executor {
       waitForResendTransaction.call(this);
     }
 
-    this.clog('debug', `Tx ${txHash}: 📮 Sending to the mempool...`);
+    this.clog('info', `Tx ${txHash}: 📮 Sending to the mempool...`);
     try {
       this.sendTransactionLog(tx, txHash, resendCount, 'sign', prevTxHash).catch(() => {});
       const sendRes = await this.network.getProvider().sendTransaction(signedTx);
-      this.clog('debug', `Tx ${txHash}: 🚬 Waiting for the tx to be mined...`);
+      this.clog('info', `Tx ${txHash}: 🚬 Waiting for the tx to be mined...`);
       res = await sendRes.wait(1);
       envelope.executorCallbacks.txExecutionSuccess(res, tx.data as string);
       this.sendTransactionLog(tx, txHash, resendCount, 'confirm', prevTxHash).catch(() => {});
       callback(null, res);
       this.clog(
-        'debug',
+        'info',
         `Tx ${txHash}: ⛓ Successfully mined in block #${res.blockNumber} with nonce ${tx.nonce}. The queue length is: ${this.queue.length}.`,
       );
     } catch (e) {
@@ -205,17 +209,16 @@ export class PGAExecutor extends AbstractExecutor implements Executor {
         confirmedAtBlockDateTime: new Date(parseInt(this.network.getLatestBlockTimestamp().toString()) * 1000),
       };
     }
+
     const chainId = networkStatusObj['chainId'];
-    let fee= await this.network.getProvider().getFeeData();
+
     const txData = {
       transactionJson: jsonStringify(prepareTx(transaction)),
       metadataJson: jsonStringify({
         appEnv: process.env.APP_ENV,
         appVersion: this.network.getAppVersion(),
-        baseFeeGwei: (fee.lastBaseFeePerGas),
-        // baseFeeGwei: weiValueToGwei(networkStatusObj['baseFee']),
-        maxPriorityFeeGwei: (fee.maxPriorityFeePerGas),
-        // maxPriorityFeeGwei: weiValueToGwei(BigInt(await this.network.getMaxPriorityFeePerGas().catch(() => 0))),
+        baseFeeGwei: weiValueToGwei(networkStatusObj['baseFee']),
+        maxPriorityFeeGwei: weiValueToGwei(BigInt(await this.network.getMaxPriorityFeePerGas().catch(() => 0))),
         keeperId: agent ? agent.keeperId : null,
         rpc: networkStatusObj['rpc'],
         rpcClient: await this.network.getClientVersion(),
