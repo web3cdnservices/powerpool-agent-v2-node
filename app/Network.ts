@@ -333,7 +333,7 @@ export class Network {
         // console.error('The ws connection was closed', JSON.stringify(err, null, 2));
 
         setTimeout(()=>{
-          // this.stop();
+          this.stop();
           this.initProvider();
         },3000)
 
