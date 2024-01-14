@@ -4,6 +4,7 @@ import { ContractWrapper, ErrorWrapper, EventWrapper, TxDataWrapper, WrapperList
 import { Fragment, ErrorFragment, FunctionFragment, EventFragment } from 'ethers/lib/utils.js';
 import logger from '../services/Logger.js';
 import QueueEmitter from '../services/QueueEmitter.js';
+import {Network} from "../Network";
 
 // DANGER: DOES NOT support method override
 export class EthersContract implements ContractWrapper {
@@ -16,6 +17,7 @@ export class EthersContract implements ContractWrapper {
 
   private readonly primaryEndpoint: string;
   private readonly providers: Map<string, ethers.providers.BaseProvider>;
+  private readonly network: Network;
 
   private readonly abiFunctionOutputKeys: Map<string, Array<string>>;
   private readonly abiEventKeys: Map<string, Array<string>>;
@@ -29,14 +31,12 @@ export class EthersContract implements ContractWrapper {
   constructor(
     addressOrName: string,
     contractInterface: ReadonlyArray<Fragment>,
-    primaryEndpoint: string,
-    providers: Map<string, ethers.providers.BaseProvider>,
+    network :Network,
     wsCallTimeout: number,
   ) {
+    this.network = network;
     this.address = addressOrName;
-    this.contract = new ethers.Contract(addressOrName, contractInterface, providers.get(primaryEndpoint));
-    this.primaryEndpoint = primaryEndpoint;
-    this.providers = providers;
+    this.contract = new ethers.Contract(addressOrName, contractInterface, this.network.getProvider());
     this.abiFunctionOutputKeys = new Map();
     this.abiEventKeys = new Map();
     this.abiEvents = new Map();
@@ -77,12 +77,11 @@ export class EthersContract implements ContractWrapper {
       }
     }
 
-    providers.get(primaryEndpoint).on(
+    //https://docs.ethers.org/v5/single-page/#/v5/api/contract/example/-%23-erc20-meta-events
+
+      network.getProvider().on(
       {
-        address: this.address,
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        fromBlock: 'latest',
+        address: this.address
       },
       async log => {
         await this.processLog(log);
@@ -138,10 +137,10 @@ export class EthersContract implements ContractWrapper {
   }
 
   public getDefaultProvider(): ethers.providers.BaseProvider {
-    if (!this.providers) {
+    if (!this.network.getProvider()) {
       throw this.err('Provider not initialized');
     }
-    return this.providers.get(this.primaryEndpoint);
+    return this.network.getProvider();
   }
 
   public encodeABI(method: string, args = []): string {
